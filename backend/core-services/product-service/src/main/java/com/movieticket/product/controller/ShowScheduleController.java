@@ -1,0 +1,177 @@
+package com.movieticket.product.controller;
+
+import com.movieticket.product.common.ApiResponse;
+import com.movieticket.product.dto.admin.request.ShowScheduleCreateDTO;
+import com.movieticket.product.dto.admin.request.ShowScheduleSearchDTO;
+import com.movieticket.product.dto.admin.request.ShowScheduleUpdateDTO;
+import com.movieticket.product.dto.admin.response.SelectionDTO;
+import com.movieticket.product.dto.admin.response.ShowScheduleLookupDto;
+import com.movieticket.product.dto.admin.response.ShowScheduleResDTO;
+import com.movieticket.product.dto.client.BookingLayoutDTO;
+import com.movieticket.product.dto.client.CinemaShowtimeDTO;
+import com.movieticket.product.dto.client.ShowtimeDTO;
+import com.movieticket.product.entity.ShowSchedule;
+import com.movieticket.product.service.ShowScheduleLookupService;
+import com.movieticket.product.dto.response.InfoBooking;
+import com.movieticket.product.dto.response.MoiveAndShowScheduleReponse;
+import com.movieticket.product.service.ShowScheduleService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.repository.query.Param;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/show-schedules")
+@RequiredArgsConstructor
+public class ShowScheduleController {
+    private final ShowScheduleService showScheduleService;
+    private final ShowScheduleLookupService showScheduleLookupService;
+
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<ShowScheduleLookupDto>> getShowScheduleById(@PathVariable String id) {
+        ShowScheduleLookupDto showSchedule = showScheduleLookupService.getShowScheduleById(id);
+        ApiResponse<ShowScheduleLookupDto> response = ApiResponse.success(showSchedule, "Show schedule retrieved successfully");
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/admin/search")
+    public ResponseEntity<ApiResponse<Page<ShowScheduleResDTO>>> search(
+            ShowScheduleSearchDTO searchDTO,
+            @PageableDefault(size = 10, sort = "startTime", direction = Sort.Direction.ASC) Pageable pageable) {
+
+        Page<ShowScheduleResDTO> showSchedule = showScheduleService.searchSchedules(searchDTO, pageable);
+
+        ApiResponse<Page<ShowScheduleResDTO>> pageApiResponse = ApiResponse.success(showSchedule, "");
+
+        return ResponseEntity.ok(pageApiResponse);
+    }
+
+    @PostMapping("/admin")
+    public ResponseEntity<ApiResponse<ShowSchedule>> createShowSchedule(
+            @Valid @RequestBody ShowScheduleCreateDTO createDTO) {
+
+        // Gọi service xử lý logic (check phim, check room, check trùng lịch)
+        ShowSchedule result = showScheduleService.createShowSchedule(createDTO);
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(result, "Tạo suất chiếu mới thành công!"));
+    }
+
+    @PutMapping("/admin/{id}")
+    public ResponseEntity<ApiResponse<ShowSchedule>> updateShowSchedule(
+            @PathVariable String id,
+            @Valid @RequestBody ShowScheduleUpdateDTO dto) {
+
+        ShowSchedule result = showScheduleService.update(id, dto);
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(result, "Cập nhật suất chiếu thành công!"));
+    }
+
+    @GetMapping("/public/find-by-movie/{movieId}")
+    public ResponseEntity<ApiResponse<List<CinemaShowtimeDTO>>> getShowtimes(
+            @PathVariable String movieId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+
+        return ResponseEntity.ok(ApiResponse.success(showScheduleService.getMovieShowtimes(movieId, date), ""));
+    }
+
+    @GetMapping("/public/search")
+    public ResponseEntity<ApiResponse<List<ShowScheduleResDTO>>> searchPublicSchedules(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) String movieTitle,
+            @RequestParam(required = false) String cinemaId,
+            @RequestParam(required = false, defaultValue = "50") Integer limit
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                showScheduleService.searchPublicSchedules(startDate, endDate, movieTitle, cinemaId, limit),
+                ""
+        ));
+    }
+
+    @GetMapping("/booking-layout/{showScheduleId}")
+    public ResponseEntity<ApiResponse<BookingLayoutDTO>> getLayout(@PathVariable String showScheduleId) {
+        BookingLayoutDTO data = showScheduleService.getBookingLayout(showScheduleId);
+        return ResponseEntity.ok(ApiResponse.success(data, ""));
+    }
+
+    @GetMapping("/public/get-show-time-on-date/{movieId}")
+    public ResponseEntity<ApiResponse<List<ShowtimeDTO>>> getShowTimeOnDate(
+            @PathVariable String movieId,
+            @RequestParam String cinemaId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
+    ) {
+        List<ShowtimeDTO> data =
+                showScheduleService.getListShowTime(movieId, cinemaId, date);
+
+        return ResponseEntity.ok(ApiResponse.success(data, ""));
+    }
+
+    @GetMapping("/public/get-available-dates/{movieId}")
+    public ResponseEntity<ApiResponse<List<LocalDate>>> getShowTimeOnDate(
+            @PathVariable String movieId
+    ) {
+        List<LocalDate> data =
+                showScheduleService.getAvailableDates(movieId);
+        return ResponseEntity.ok(ApiResponse.success(data, ""));
+    }
+
+     @GetMapping("/movies-and-schedules")
+    public ApiResponse<List<MoiveAndShowScheduleReponse>> getMoiveAndSchedules(@RequestHeader(value = "X-Cinema-Id", required = true) String cinemaHeaderId) {
+        try{
+            List<MoiveAndShowScheduleReponse> list = showScheduleService.getMovieAndSchedulesForPos(cinemaHeaderId);
+            return ApiResponse.success(list, "Lấy danh sách phim và suất chiếu thành công");
+        } catch (Exception e) {
+            System.err.println("Lỗi khi lấy danh sách phim và suất chiếu: " + e.getMessage());
+            return ApiResponse.fail("Lỗi khi lấy danh sách phim và suất chiếu: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/public/cinema-option-by-movie/{movieId}")
+    ResponseEntity<ApiResponse<List<SelectionDTO>>> getCinemaOptionByMovie(
+            @PathVariable String movieId
+    ) {
+        List<SelectionDTO> data =
+                showScheduleService.getCinemasByMovie(movieId);
+        return ResponseEntity.ok(ApiResponse.success(data, ""));
+    }
+
+    @GetMapping("/public/active-date-for-movie-cinema")
+    ResponseEntity<ApiResponse<List<LocalDate>>> getCinemaOptionByMovie(
+            @Param("movieId") String movieId,
+            @Param("cinemaId") String cinemaId
+    ) {
+        List<LocalDate> data =
+                showScheduleService.getDatesByMovieAndCinema(movieId, cinemaId);
+        return ResponseEntity.ok(ApiResponse.success(data, ""));
+    }
+
+    @PostMapping("/batch")
+    public ResponseEntity<ApiResponse<List<ShowScheduleLookupDto>>> getShowSchedulesByIds(
+            @RequestBody List<String> ids
+    ) {
+        List<ShowScheduleLookupDto> showSchedules = showScheduleLookupService.getShowSchedulesByIds(ids);
+        return ResponseEntity.ok(ApiResponse.success(showSchedules, "Show schedules retrieved successfully"));
+    }
+
+    @GetMapping("/get-info-for-booking")
+    public ResponseEntity<ApiResponse<InfoBooking> > getInfoForBooking(
+            @RequestParam(required = true) String showScheduleId,
+            @RequestParam(required = true) List<String> productIds
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(showScheduleService.getInfoBooking(showScheduleId, productIds), "Lấy thông tin booking thành công"));
+    }
+
+}

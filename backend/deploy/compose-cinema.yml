@@ -1,0 +1,14 @@
+services:
+  cinema-management-service:
+    image: ${DOCKER_USERNAME}/cinema-management-service:latest
+    container_name: cinema-management-service
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: ${EUREKA_URL}
+      SPRING_CLOUD_CONFIG_URI: ${CONFIG_SERVER_URL}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+      SPRING_DATASOURCE_URL: ${CINEMA_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${CINEMA_DB_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${CINEMA_DB_PASSWORD}
+    ports:
+      - "8081:8081"
+    restart: always

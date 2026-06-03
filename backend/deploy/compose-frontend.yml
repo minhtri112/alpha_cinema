@@ -1,0 +1,7 @@
+services:
+  frontend:
+    image: ${DOCKER_USERNAME}/frontend:latest
+    container_name: alpha-frontend
+    ports:
+      - "80:80"
+    restart: always

@@ -1,0 +1,37 @@
+# File cấu hình cho cinema-management-service
+
+server:
+  port: 8081 # Port chạy service quản lý rạp phim
+
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/alpha_cinema_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
+    username: root
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      # Tự động cập nhật bảng trong DB khi code Entity thay đổi (phù hợp lúc dev)
+      ddl-auto: update
+    # Hiển thị câu lệnh SQL thực thi dưới log để dễ debug
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        # Dùng MySQLDialect để Hibernate biết cách sinh SQL phù hợp với MySQL
+        dialect: org.hibernate.dialect.MySQLDialect
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+      timeout: 6000ms
+      connect-timeout: 2000ms
+
+eureka:
+  client:
+    service-url:
+      # Nơi đăng ký với Eureka Server với tên là cinema-management-service
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE}
+  instance:
+    prefer-ip-address: true

@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@theme {
+  --color-alpha-orange: #ff5f00;
+  --color-alpha-dark: #08060d;
+  --color-alpha-blue: #034ea2;
+}
+
+@layer base {
+  ::-webkit-scrollbar {
+    display: none;
+  }
+
+  html {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light;
+  color: #1a1a1a;
+  background-color: #ffffff;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#root {
+  width: 100%;
+}
+
+
+
+/* Đoạn CSS này CHỈ CÓ TÁC DỤNG khi trình duyệt mở hộp thoại in */
+@media print {
+
+  /* 1. Ẩn toàn bộ mọi thứ trên trang web đi */
+  body * {
+    visibility: hidden;
+  }
+
+  /* 2. Chỉ hiển thị duy nhất vùng chứa cái vé (có id là ticket-receipt) */
+  #ticket-receipt,
+  #ticket-receipt * {
+    visibility: visible;
+  }
+
+  /* 3. Kéo tờ vé lên góc trên cùng bên trái của khổ giấy in */
+  #ticket-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    /* Cố định chiều rộng theo chuẩn máy in nhiệt K80 */
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Tùy chọn: Ẩn Header/Footer (URL, ngày tháng) mặc định của Google Chrome */
+  @page {
+    margin: 0;
+  }
+}

@@ -1,0 +1,49 @@
+name: Deploy Frontend
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - "frontend/web/**"
+      - "backend/deploy/compose-frontend.yml"
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./frontend/web
+          file: ./frontend/web/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/frontend:latest
+
+  deploy-to-ec2:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.FRONTEND_SSH_HOST }}
+          username: ${{ secrets.COMMON_EC2_SSH_USER }}
+          key: ${{ secrets.COMMON_EC2_SSH_KEY }}
+          port: ${{ secrets.COMMON_EC2_SSH_PORT }}
+          script: |
+            set -e
+            cd ${{ secrets.FRONTEND_DEPLOY_PATH }}
+            git pull origin main
+            docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+            docker pull ${{ secrets.DOCKER_USERNAME }}/frontend:latest
+            docker compose -f backend/deploy/compose-frontend.yml up -d

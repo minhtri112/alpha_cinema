@@ -1,0 +1,20 @@
+services:
+  cinema-management-service:
+    build:
+      context: ../..
+      dockerfile: core-services/cinema-management-service/Dockerfile
+    container_name: cinema-management-service
+    env_file:
+      - ./.env.docker
+    environment:
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+    ports:
+      - "8081:8081"
+    restart: always
+    depends_on:
+      - config-server
+      - eureka-server
+    networks:
+      - alpha_network

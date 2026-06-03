@@ -1,0 +1,74 @@
+server:
+  port: 8082
+
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/alpha_order_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Ho_Chi_Minh
+    username: root
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+      timeout: 6000ms
+      connect-timeout: 2000ms
+  kafka:
+    bootstrap-servers: ${KAFKA_HOST:localhost}:${KAFKA_PORT:9094}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: true
+        spring.json.type.mapping: >
+          loyalty_event:com.movieticket.order.event.model.UserLoyaltyUpdateEvent,
+          order_event:com.movieticket.order.event.model.OrderSuccessfulEvent,
+          payment-by-cash-requests:com.movieticket.order.event.model.PaymentByCashRequestEvent
+    consumer:
+      group-id: order-service
+      auto-offset-reset: earliest
+      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.use.type.headers: true
+        spring.json.trusted.packages: "com.movieticket.*"
+        spring.json.type.mapping: > 
+          payment_result_event:com.movieticket.order.event.model.PaymentResultEvent,
+          payment-result-cash-events:com.movieticket.order.event.model.PaymentResultEvent
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE}
+  instance:
+    prefer-ip-address: true
+
+external-services:
+  product-service:
+    base-url: ${PRODUCT_SERVICE_BASE_URL}
+  ticket-service:
+    base-url: ${TICKET_SERVICE_BASE_URL}
+  user-service:
+    base-url: ${USER_SERVICE_BASE_URL}
+  payment-service:
+    base-url: ${PAYMENT_SERVICE_BASE_URL}
+  cinema-service:
+    base-url: ${CINEMA_SERVICE_BASE_URL}
+  ai-service:
+    base-url: ${AI_SERVICE_BASE_URL}
+
+logging:
+  level:
+    org.springframework.kafka: DEBUG
+    org.apache.kafka: INFO

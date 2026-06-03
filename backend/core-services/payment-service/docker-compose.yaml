@@ -1,0 +1,20 @@
+services:
+  payment-service:
+    build:
+      context: ../..
+      dockerfile: core-services/payment-service/Dockerfile
+    container_name: payment-service
+    env_file:
+      - ./.env.docker
+    environment:
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD}
+    ports:
+      - "8083:8083"
+    restart: always
+    depends_on:
+      - config-server
+      - eureka-server
+    networks:
+      - alpha_network

@@ -1,0 +1,238 @@
+package com.movieticket.cinema.service;
+
+import com.movieticket.cinema.api_response.ApiResponse;
+import com.movieticket.cinema.dto.*;
+import com.movieticket.cinema.entity.Room;
+import com.movieticket.cinema.entity.Seat;
+import com.movieticket.cinema.entity.SeatType;
+import com.movieticket.cinema.repository.RoomRepository;
+import com.movieticket.cinema.repository.SeatRepository;
+import com.movieticket.cinema.repository.SeatTypeRepository;
+import com.movieticket.cinema.util.GenerateID;
+import lombok.RequiredArgsConstructor;
+import org.hibernate.sql.exec.ExecutionException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.data.redis.core.RedisTemplate;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.function.Function;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@Service
+public class SeatService {
+    @Autowired
+    private SeatRepository seatRepository;
+    @Autowired
+    private RoomRepository roomRepository;
+    @Autowired
+    private SeatTypeRepository seatTypeRepository;
+    @Autowired
+    private RestTemplate restTemplate;
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+
+    public List<Seat> getAllSeatsByRoom(String id) {
+        return seatRepository.findByRoom_Id(id);
+    }
+
+    public List<Seat> createAndEditSeats(SeatRequest seatRequest) {
+        Room room = roomRepository.findById(seatRequest.getRoomId())
+                .orElseThrow(() -> new ExecutionException("Room khong ton tai"));
+        SeatType seatType = seatTypeRepository.findById(seatRequest.getSeatTypeId())
+                .orElseThrow(() -> new ExecutionException("Seat type khong ton tai"));
+
+        List<Seat> existingSeatsInDb = seatRepository.findByRoomId(room.getId());
+
+        Map<String, Seat> existingSeatMap = existingSeatsInDb.stream()
+                .collect(Collectors.toMap(
+                        s -> s.getRowName() + "-" + s.getColumnName(),
+                        s -> s));
+
+        List<Seat> seatsToSave = seatRequest.getSeatItems().stream()
+                .map(item -> {
+                    String key = item.getRowName() + "-" + item.getColumnName();
+                    Seat seat = existingSeatMap.getOrDefault(key, new Seat());
+
+                    if (seat.getId() == null) {
+                        seat.setId(GenerateID.generateSeatId(seatRequest.getRoomId()));
+                    }
+
+                    seat.setRowName(item.getRowName());
+                    seat.setColumnName(item.getColumnName());
+                    seat.setStatus(seatRequest.isStatus());
+                    seat.setRoom(room);
+                    seat.setSeatType(seatType);
+
+                    return seat;
+                }).toList();
+        return seatRepository.saveAll(seatsToSave);
+    }
+
+    @CircuitBreaker(name = "orderService")
+    @Retry(name = "orderService", fallbackMethod = "getAllSeatsByShowScheduleFallback")
+    public List<SeatForShowScheduleResponse> getAllSeatsByShowSchedule(String showScheduleId, String roomID) {
+        List<Seat> physicalSeats = seatRepository.findByRoomId(roomID);
+
+        String url = "http://order-service/api/show-schedule-details/show-schedule-id/" + showScheduleId;
+
+        ResponseEntity<ApiResponse<List<ShowScheduleDetailDTO>>> response = restTemplate.exchange(
+                url,
+                HttpMethod.GET,
+                null,
+                new ParameterizedTypeReference<ApiResponse<List<ShowScheduleDetailDTO>>>() {
+                });
+
+        List<String> bookedSeatIds = new ArrayList<>();
+        if (response.getBody() != null && response.getBody().getData() != null) {
+            bookedSeatIds = response.getBody().getData().stream()
+                    .map(ShowScheduleDetailDTO::getSeatId)
+                    .collect(Collectors.toList());
+        }
+
+        // Get locked seats from Redis
+        List<String> lockedSeatIds = getLockedSeatIds(showScheduleId);
+
+        List<String> finalBookedSeatIds = bookedSeatIds;
+        return physicalSeats.stream().map(seat -> {
+            String currentStatus = "AVAILABLE";
+
+            if (lockedSeatIds.contains(seat.getId())) {
+                currentStatus = "LOCKED";
+            } else if (finalBookedSeatIds.contains(seat.getId())) {
+                currentStatus = "BOOKED";
+            }
+
+            return SeatForShowScheduleResponse.builder()
+                    .id(seat.getId())
+                    .rowName(seat.getRowName())
+                    .columnName(seat.getColumnName())
+                    .seatTypeId(seat.getSeatType().getId())
+                    .seatTypeName(seat.getSeatType().getName())
+                    .status(currentStatus)
+                    .build();
+        }).collect(Collectors.toList());
+    }
+
+    public List<SeatForShowScheduleResponse> getAllSeatsByShowScheduleFallback(String showScheduleId, String roomID, Throwable throwable) {
+        System.err.println("Fallback trigger for getAllSeatsByShowSchedule: " + throwable.getMessage());
+        
+        // Ném ra một custom exception. 
+        // Hãy đảm bảo bạn có @ExceptionHandler để bắt lỗi này và trả về HTTP 503 cho Frontend
+        throw new RuntimeException("Hệ thống đặt vé hiện không thể tải sơ đồ ghế. Vui lòng thử lại sau.");
+    }
+    
+    public List<SeatLookupDto> getSeatsByIds(List<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> normalizedIds = ids.stream()
+                .filter(id -> id != null && !id.isBlank())
+                .map(String::trim)
+                .collect(Collectors.collectingAndThen(Collectors.toCollection(LinkedHashSet::new), List::copyOf));
+
+        if (normalizedIds.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, Seat> seatsById = seatRepository.findByIdIn(normalizedIds)
+                .stream()
+                .collect(Collectors.toMap(Seat::getId, Function.identity(), (first, second) -> first));
+
+        return normalizedIds.stream()
+                .map(id -> {
+                    Seat seat = seatsById.get(id);
+                    if (seat == null) {
+                        return null;
+                    }
+
+                    return SeatLookupDto.builder()
+                            .id(seat.getId())
+                            .roomId(seat.getRoom() == null ? null : seat.getRoom().getId())
+                            .rowName(seat.getRowName())
+                            .columnName(seat.getColumnName())
+                            .seatTypeId(seat.getSeatType() == null ? null : seat.getSeatType().getId())
+                            .status(seat.isStatus())
+                            .build();
+                })
+                .filter(seat -> seat != null)
+                .toList();
+    }
+
+
+    //Hà Thanh Tuấn
+    public List<SeatResponseToProduct> getSeatsByRoom(String roomId) {
+        List<Object[]> results = seatRepository.findAllPhysicalSeatsByRoom(roomId);
+
+        return results.stream().map(row -> SeatResponseToProduct.builder()
+                        .seatId((String) row[0])
+                        .rowName((String) row[1])
+                        .columnName((String) row[2])
+                        .seatTypeId((String) row[3])
+                        .seatType((String) row[4])
+                        .isUsable((Boolean) row[5])
+                        .build())
+                .toList();
+    }
+
+    public InfoBookingResponse getInfoForBooking(List<String> seatIds) {
+        List<Seat> seats = seatRepository.findByIdIn(seatIds);
+
+        if(seats.isEmpty()) {
+            throw new ExecutionException("Không tìm thấy ghế nào với các ID đã cho");
+        }
+
+        Integer roomNumber = seats.get(0).getRoom().getRoomNumber();
+
+        List<InfoBookingResponse.Seat> seatResponses = seats.stream()
+                .map(seat -> InfoBookingResponse.Seat.builder()
+                        .seatId(seat.getId())
+                        .seatNumber(seat.getRowName() + seat.getColumnName())
+                        .seatType(seat.getSeatType().getName())
+                        .build())
+                .toList();
+
+        return InfoBookingResponse.builder()
+                .roomNumber(roomNumber)
+                .seats(seatResponses)
+                .build();
+    }
+
+    private List<String> getLockedSeatIds(String showScheduleId) {
+        if (showScheduleId == null || showScheduleId.isBlank()) {
+            return List.of();
+        }
+
+        String lockKeyPattern = "seat:lock:" + showScheduleId + ":*";
+        try {
+            return redisTemplate.keys(lockKeyPattern).stream()
+                    .map(key -> extractSeatIdFromKey(key, showScheduleId))
+                    .filter(seatId -> seatId != null && !seatId.isBlank())
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            // If Redis is unavailable, return empty list
+            return List.of();
+        }
+    }
+
+    private String extractSeatIdFromKey(String key, String showScheduleId) {
+        // Key format: seat:lock:showScheduleId:seatId
+        String prefix = "seat:lock:" + showScheduleId + ":";
+        if (key.startsWith(prefix)) {
+            return key.substring(prefix.length());
+        }
+        return null;
+    }
+
+}
