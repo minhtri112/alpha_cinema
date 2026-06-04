@@ -44,6 +44,7 @@ jobs:
             set -e
             cd ${{ secrets.FRONTEND_DEPLOY_PATH }}
             git pull origin main
+            export DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
             docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
             docker pull ${{ secrets.DOCKER_USERNAME }}/frontend:latest
             docker compose -f backend/deploy/compose-frontend.yml up -d
