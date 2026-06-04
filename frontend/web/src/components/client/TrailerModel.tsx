@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Loader2, PlayCircle } from 'lucide-react';
+import { Loader2, PlayCircle } from 'lucide-react';
 
 interface TrailerModalProps {
     isOpen: boolean;

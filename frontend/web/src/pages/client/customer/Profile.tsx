@@ -72,7 +72,7 @@ const ProfilePage: React.FC = () => {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [isOrderDetailOpen, setIsOrderDetailOpen] = useState(false);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
-  const [reviewMovie, setReviewMovie] = useState<{ id: string, name: string } | null>(null);
+  const [reviewMovie] = useState<{ id: string, name: string } | null>(null);
 
   const handleShowOrderDetail = (orderId: string) => {
     setSelectedOrderId(orderId);

@@ -1,5 +1,5 @@
 import React from "react";
-import { Bell, Ticket, Star, Info, CheckCircle2, AlertCircle, X } from "lucide-react";
+import { Bell, Ticket, Star, CheckCircle2, AlertCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface NotificationItemProps {

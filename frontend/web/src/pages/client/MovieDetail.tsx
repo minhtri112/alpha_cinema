@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { movieService } from '../../services/movie.service';
 import { Container, Section } from '../../components/common/Layout';
@@ -20,7 +20,6 @@ import NowShowingMovies from '@/components/client/NowShowingMovies';
 
 const MovieDetail = () => {
     const { id } = useParams<{ id: string }>();
-    const navigate = useNavigate();
     const [isTrailerOpen, setIsTrailerOpen] = useState<boolean>(false);
     const reviewsRef = useRef<HTMLDivElement>(null);
 
